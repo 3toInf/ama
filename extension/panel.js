@@ -1,4 +1,6 @@
 import { searchItems, MAX_BACKUP_BYTES, COLORS } from './core.js';
+import { isSplit } from './split.js';
+import { attachSplitDrag } from './split-drag.js';
 
 const $ = selector => document.querySelector(selector);
 const colors = { grey: '#99919f', blue: '#6a8bbc', red: '#c86b74', yellow: '#baa358', green: '#79a18a', pink: '#bd88a6', purple: '#9781b4', cyan: '#63a9b4', orange: '#c48d66' };
@@ -7,6 +9,7 @@ let targetWindow;
 let currentWorkspace;
 let view = new URLSearchParams(location.search).get('view') === 'settings' ? 'settings' : 'workspace';
 let editingWorkspace = null;
+let resourceWorkspaceId = null;
 let settingsDirty = false;
 let refreshVersion = 0;
 let refreshTimer;
@@ -82,6 +85,7 @@ function workspaceName(id) { return data.state.workspaces.find(item => item.id =
 
 function row(item, kind, owner) {
   const node = element('div', `row${item.active ? ' active' : ''}`);
+  if (kind === 'tab' || kind === 'unassigned') node.dataset.tabId = item.id;
   const icon = element('span', 'page-icon', hostname(item.url).replace(/^www\./u, '').slice(0, 1).toUpperCase() || '↗');
   icon.setAttribute('aria-hidden', 'true');
   const content = button('', item.title || item.url, async () => {
@@ -92,6 +96,7 @@ function row(item, kind, owner) {
   content.className = 'row-content';
   content.append(element('strong', '', item.title || item.url));
   const detail = [hostname(item.url), item.workspaceName];
+  if ((kind === 'tab' || kind === 'unassigned') && isSplit(item)) detail.push('分屏中');
   if (kind === 'archive') detail.push(new Date(item.archivedAt).toLocaleDateString());
   content.append(element('small', '', detail.filter(Boolean).join(' · ')));
   const actions = element('div', 'row-actions');
@@ -108,6 +113,20 @@ function row(item, kind, owner) {
       if (confirm(`永久移除“${item.title}”的这条归档记录？`)) await action('ARCHIVE_DELETE', { archiveId: item.id }, '记录已删除');
     }));
   } else {
+    if (data.capabilities?.splitView) {
+      if (isSplit(item)) {
+        actions.append(button('◧', '取消分屏，保留两个标签', () => action('TAB_UNSPLIT', { tabId: item.id }, '已取消分屏'), 'unsplit'));
+      } else if (!item.pinned) {
+        attachSplitDrag(node, item, (sourceTabId, targetTabId) => run(() =>
+          action('TABS_SPLIT', { sourceTabId, targetTabId }, '已创建分屏')));
+        const active = data.tabs.find(tab => tab.active);
+        if (active && active.id !== item.id && !active.pinned && !isSplit(active) && active.groupId === item.groupId) {
+          actions.append(button('◫', '与当前标签分屏', () => action('TABS_SPLIT', {
+            sourceTabId: item.id, targetTabId: active.id,
+          }, '已创建分屏'), 'split'));
+        }
+      }
+    }
     if (kind === 'unassigned' && !item.pinned) actions.append(button('＋', '收入当前工作区', () => action('TAB_MOVE', { tabId: item.id, workspaceId: currentWorkspace }, '已收入工作区'), 'move'));
     actions.append(button('☆', '保存为常用链接', () => openResourceDialog(item)));
     if (!item.pinned && !item.audible) actions.append(button('↓', '归档此标签，未保存输入不会保留', () => action('TAB_ARCHIVE', { tabId: item.id }, '已归档，可随时找回'), 'archive'));
@@ -162,6 +181,9 @@ function renderWorkspaces() {
     list.append(chip);
   }
   const item = workspace();
+  $('#split-hint').textContent = data.capabilities?.splitView
+    ? '将一个标签拖到另一个标签上以分屏，或点击 ◫。两个标签须在同一标签组。'
+    : '当前 Chrome 尚不支持扩展分屏。其他工作区功能可继续使用。';
   $('#workspace-title').textContent = item.name;
   const binding = data.session.groups.find(group => group.windowId === targetWindow && group.workspaceId === item.id);
   const tabs = binding ? data.tabs.filter(tab => tab.groupId === binding.groupId) : [];
@@ -239,7 +261,8 @@ async function refresh() {
   const result = await request('READ');
   if (version !== refreshVersion) return;
   data = result;
-  if (!currentWorkspace) currentWorkspace = data.session.active.find(item => item.windowId === targetWindow)?.workspaceId || data.state.workspaces[0].id;
+  currentWorkspace = data.session.active.find(item => item.windowId === targetWindow)?.workspaceId
+    || currentWorkspace || data.state.workspaces[0].id;
   render();
 }
 
@@ -249,6 +272,7 @@ function scheduleRefresh() {
 }
 
 function openResourceDialog(page = {}) {
+  resourceWorkspaceId = workspace().id;
   const form = $('#resource-form');
   form.reset();
   form.elements.title.value = page.title || '';
@@ -263,6 +287,8 @@ document.querySelectorAll('[data-view]').forEach(node => node.addEventListener('
   render();
 }));
 $('#search').addEventListener('input', render);
+$('#palette-shortcut').textContent = navigator.platform.includes('Mac') ? '⌘ ⇧ K' : 'Ctrl ⇧ K';
+$('#open-palette').addEventListener('click', () => run(() => request('PALETTE_OPEN')));
 document.querySelectorAll('[data-close]').forEach(node => node.addEventListener('click', () => node.closest('dialog').close()));
 $('#new-workspace').addEventListener('click', () => {
   editingWorkspace = null;
@@ -287,14 +313,19 @@ $('#workspace-form').addEventListener('submit', event => {
   run(async () => {
     const values = Object.fromEntries(new FormData(event.target));
     const result = await request(editingWorkspace ? 'WORKSPACE_RENAME' : 'WORKSPACE_CREATE', { ...values, workspaceId: editingWorkspace });
-    if (!editingWorkspace) currentWorkspace = result.id;
+    if (!editingWorkspace) {
+      currentWorkspace = result.id;
+      await request('WORKSPACE_SWITCH', { workspaceId: result.id });
+    }
     $('#workspace-dialog').close();
     await refresh();
     notify('工作区已保存');
   });
 });
 $('#delete-workspace').addEventListener('click', () => run(async () => {
-  if (!confirm(`删除“${workspace().name}”及其常用链接和快照？打开的页面和归档记录会保留。`)) return;
+  const item = data.state.workspaces.find(workspace => workspace.id === editingWorkspace);
+  if (!item) throw new Error('此工作区已被删除，请关闭对话框后重试。');
+  if (!confirm(`删除“${item.name}”及其常用链接和快照？打开的页面和归档记录会保留。`)) return;
   await action('WORKSPACE_DELETE', { workspaceId: editingWorkspace }, '工作区已删除');
   $('#workspace-dialog').close();
 }));
@@ -307,7 +338,7 @@ $('#save-current').addEventListener('click', () => run(async () => {
 $('#resource-form').addEventListener('submit', event => {
   event.preventDefault();
   run(async () => {
-    await action('RESOURCE_ADD', { workspaceId: currentWorkspace, ...Object.fromEntries(new FormData(event.target)) }, '已保存到常用链接');
+    await action('RESOURCE_ADD', { workspaceId: resourceWorkspaceId, ...Object.fromEntries(new FormData(event.target)) }, '已保存到常用链接');
     $('#resource-dialog').close();
   });
 });

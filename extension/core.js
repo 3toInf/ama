@@ -57,7 +57,7 @@ export function canArchive(tab, settings, now, automatic = true) {
   try { validateUrl(tab.url); } catch { return false; }
   if (tab.incognito || tab.pinned || tab.audible || tab.status === 'loading') return false;
   if (!automatic) return true;
-  return settings.autoArchive === true && !tab.active
+  return settings.autoArchive === true && !tab.active && !(Number.isInteger(tab.splitViewId) && tab.splitViewId >= 0)
     && Number.isFinite(tab.lastAccessed) && tab.lastAccessed > 0 && tab.lastAccessed <= now
     && now - tab.lastAccessed >= settings.archiveHours * 3600000;
 }

@@ -1,5 +1,7 @@
 import { COLORS, createState, text, uid, validateUrl, validateSettings, canArchive,
   normalizeDomain, matchesDomain, serializeBackup, mergeBackup } from './core.js';
+import { supportsSplit, splitTabs, unsplitTab } from './split.js';
+import { inputIntent } from './palette-model.js';
 
 export function createController(api, { now = () => Date.now() } = {}) {
   let queue = Promise.resolve();
@@ -106,7 +108,8 @@ export function createController(api, { now = () => Date.now() } = {}) {
     switch (message.type) {
       case 'READ': {
         const target = windowId(message.windowId);
-        return { state, session, tabs: (await api.tabs.query({ windowId: target })).filter(tab => !tab.incognito) };
+        return { state, session, tabs: (await api.tabs.query({ windowId: target })).filter(tab => !tab.incognito),
+          capabilities: { splitView: supportsSplit(api) } };
       }
       case 'WORKSPACE_CREATE': {
         if (state.workspaces.length >= 200) throw new Error('最多创建 200 个工作区。');
@@ -163,12 +166,48 @@ export function createController(api, { now = () => Date.now() } = {}) {
       case 'TAB_MOVE':
         await addToGroup(state, session, await api.tabs.get(message.tabId), message.workspaceId);
         return {};
+      case 'TABS_SPLIT':
+        return splitTabs(api, message.sourceTabId, message.targetTabId, windowId(message.windowId));
+      case 'TAB_UNSPLIT':
+        return unsplitTab(api, message.tabId, windowId(message.windowId));
       case 'TAB_FOCUS': {
         const tab = await api.tabs.get(message.tabId);
         await api.windows.update(tab.windowId, { focused: true });
         await api.tabs.update(tab.id, { active: true });
         return {};
       }
+      case 'OPEN_INPUT': {
+        const target = windowId(message.windowId);
+        workspaceFor(state, message.workspaceId);
+        const intent = inputIntent(message.input);
+        let tab;
+        if (intent.kind === 'url') {
+          tab = await openPage(state, session, { url: intent.url }, message.workspaceId, target);
+        } else {
+          if (typeof api.search?.query !== 'function') throw new Error('请在扩展管理中启用 AMA 的搜索权限。');
+          tab = await api.tabs.create({ windowId: target, url: 'about:blank', active: false });
+          await api.search.query({ text: intent.text, tabId: tab.id });
+          await addToGroup(state, session, tab, message.workspaceId);
+          await api.tabs.update(tab.id, { active: true });
+        }
+        await api.windows.update(target, { focused: true });
+        return tab;
+      }
+      case 'NEW_TAB': {
+        const target = windowId(message.windowId);
+        workspaceFor(state, message.workspaceId);
+        const tab = await api.tabs.create({ windowId: target, active: true });
+        await addToGroup(state, session, tab, message.workspaceId);
+        await api.windows.update(target, { focused: true });
+        return tab;
+      }
+      case 'SAVE_CURRENT': {
+        const [tab] = await api.tabs.query({ windowId: windowId(message.windowId), active: true });
+        if (!tab || tab.incognito) throw new Error('当前窗口没有可保存的网页。');
+        return handle({ type: 'RESOURCE_ADD', workspaceId: message.workspaceId, url: tab.url, title: tab.title });
+      }
+      case 'OPEN_SETTINGS':
+        return api.tabs.create({ windowId: windowId(message.windowId), url: api.runtime.getURL('panel.html?view=settings'), active: true });
       case 'RESOURCE_ADD': {
         const workspace = workspaceFor(state, message.workspaceId);
         const url = validateUrl(message.url);

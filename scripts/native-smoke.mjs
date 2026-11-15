@@ -1,0 +1,59 @@
+import assert from 'node:assert/strict';
+import { resolve } from 'node:path';
+import { writeFile } from 'node:fs/promises';
+import { withChrome } from '../tests/helpers/chrome-driver.mjs';
+
+await withChrome(async ({ send, attach, errors }) => {
+  const version = await send('Browser.getVersion');
+  const { id } = await send('Extensions.loadUnpacked', { path: resolve(import.meta.dirname, '../extension') });
+  console.log(`Loaded unpacked extension ${id} in ${version.product}`);
+  const { targetId } = await send('Target.createTarget', { url: `chrome-extension://${id}/panel.html` });
+  const panel = await attach(targetId);
+  await panel.until('document.querySelectorAll(".workspace-chip").length === 1', 'real extension panel');
+  const result = await panel.evaluate(`(async () => {
+    const parent = (await chrome.windows.getCurrent()).id;
+    const request = async message => {
+      const response = await chrome.runtime.sendMessage({...message,windowId:parent});
+      if (!response?.ok) throw new Error(response?.error || 'Worker did not respond');
+      return response.data;
+    };
+    const first = await chrome.tabs.create({windowId:parent,url:'about:blank',active:false});
+    const middle = await chrome.tabs.create({windowId:parent,url:'about:blank',active:false});
+    const second = await chrome.tabs.create({windowId:parent,url:'about:blank',active:false});
+    await request({type:'TAB_MOVE',tabId:first.id,workspaceId:'home'});
+    await request({type:'TAB_MOVE',tabId:middle.id,workspaceId:'home'});
+    await request({type:'TAB_MOVE',tabId:second.id,workspaceId:'home'});
+    await request({type:'TABS_SPLIT',sourceTabId:first.id,targetTabId:second.id});
+    const pair = await Promise.all([chrome.tabs.get(first.id),chrome.tabs.get(second.id)]);
+    await request({type:'TAB_UNSPLIT',tabId:first.id});
+    const separate = await Promise.all([chrome.tabs.get(first.id),chrome.tabs.get(second.id)]);
+    await request({type:'TABS_SPLIT',sourceTabId:first.id,targetTabId:middle.id});
+    const reversePair = await Promise.all([chrome.tabs.get(first.id),chrome.tabs.get(middle.id)]);
+    await request({type:'TAB_UNSPLIT',tabId:middle.id});
+    const before = (await chrome.tabs.query({windowId:parent})).length;
+    const popup = await request({type:'PALETTE_OPEN'});
+    globalThis.__nativeParent = parent;
+    return {parent,popupId:popup.id,before,pair:pair.map(tab=>tab.splitViewId),reversePair:reversePair.map(tab=>tab.splitViewId),separate:separate.map(tab=>tab.splitViewId),commands:await chrome.commands.getAll()};
+  })()`);
+  assert.ok(result.pair[0] >= 0, 'Chrome must return a real split ID');
+  assert.equal(result.pair[0], result.pair[1]);
+  assert.deepEqual(result.separate, [-1, -1]);
+  assert.ok(result.reversePair[0] >= 0);
+  assert.equal(result.reversePair[0], result.reversePair[1]);
+  assert.ok(result.commands.find(command => command.name === 'open-palette')?.shortcut, 'palette shortcut must register');
+  const { targetInfos } = await send('Target.getTargets');
+  const paletteTarget = targetInfos.find(target => target.url.startsWith(`chrome-extension://${id}/palette.html?`));
+  assert.ok(paletteTarget, 'worker creates a real extension popup');
+  const palette = await attach(paletteTarget.targetId);
+  await palette.until('document.querySelectorAll("#palette-list [role=option]").length > 0', 'native palette');
+  assert.equal(await palette.evaluate('document.activeElement.id'), 'palette-input');
+  const screenshot = await send('Page.captureScreenshot', { format: 'png' }, palette.sessionId);
+  await writeFile('/tmp/ama-palette-native.png', Buffer.from(screenshot.data, 'base64'));
+  await palette.evaluate('document.querySelector("#palette-input").value="> new tab"; document.querySelector("#palette-input").dispatchEvent(new Event("input"))');
+  await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 }, palette.sessionId);
+  await panel.until(`(async () => (await chrome.tabs.query({windowId:${result.parent}})).length === ${result.before + 1}
+    && !(await chrome.windows.getAll()).some(window=>window.id===${result.popupId}))()`, 'palette creates tab in parent and closes');
+  assert.deepEqual(errors, []);
+  console.log('Native extension smoke passed: installation, worker messaging, native split/unsplit, registered palette shortcut, popup, Enter execution in parent window, popup dismissal.');
+  console.log('Palette screenshot: /tmp/ama-palette-native.png. OS-level Mac shortcut and physical drag remain manual checks.');
+});

@@ -1,4 +1,5 @@
 import { createController } from './controller.js';
+import { openPalette } from './palette-window.js';
 
 const controller = createController(chrome);
 let menuQueue = Promise.resolve();
@@ -41,7 +42,8 @@ chrome.alarms.get('ama-archive').then(alarm => {
 
 chrome.runtime.onMessage.addListener((message, sender, respond) => {
   if (sender.id !== chrome.runtime.id || !sender.url?.startsWith(chrome.runtime.getURL(''))) return false;
-  controller.dispatch(message).then(data => {
+  const operation = message.type === 'PALETTE_OPEN' ? openPalette(chrome, message.windowId) : controller.dispatch(message);
+  operation.then(data => {
     respond({ ok: true, data });
     if (['WORKSPACE_CREATE', 'WORKSPACE_RENAME', 'WORKSPACE_DELETE', 'IMPORT'].includes(message.type)) scheduleMenus();
   }).catch(error => respond({ ok: false, error: error.message }));
@@ -49,6 +51,11 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
 });
 
 chrome.commands.onCommand.addListener((command, tab) => {
+  if (command === 'open-palette' && tab?.windowId !== undefined) {
+    const paletteUrl = chrome.runtime.getURL('palette.html');
+    const parent = tab.url?.startsWith(`${paletteUrl}?`) ? Number(new URL(tab.url).searchParams.get('windowId')) : tab.windowId;
+    openPalette(chrome, parent).catch(setError);
+  }
   if (command === 'open-workspace' && tab?.windowId !== undefined) {
     // Keep this in the user-gesture call stack; awaiting other work would lose permission to open.
     chrome.sidePanel.open({ windowId: tab.windowId }).then(() => {

@@ -13,6 +13,38 @@ function setup(tabs = [page]) {
   return { ...fake, app };
 }
 
+test('palette opens a URL in the originating workspace and window', async () => {
+  const env = setup();
+  const tab = await env.app.dispatch({ type: 'OPEN_INPUT', input: 'example.org/docs', windowId: 9, workspaceId: 'home' });
+  assert.equal(tab.windowId, 9);
+  assert.equal(env.tabs.get(tab.id).url, 'https://example.org/docs');
+  assert.ok(env.tabs.get(tab.id).groupId >= 0);
+  assert.equal(env.control.focusedWindow, 9);
+});
+test('palette searches through the configured provider in an explicit target tab', async () => {
+  const env = setup();
+  const tab = await env.app.dispatch({ type: 'OPEN_INPUT', input: 'Chrome 分屏 API', windowId: 9, workspaceId: 'home' });
+  assert.deepEqual(env.searches, [{ text: 'Chrome 分屏 API', tabId: tab.id }]);
+  assert.equal(env.tabs.get(tab.id).windowId, 9);
+  assert.equal(env.control.focusedWindow, 9);
+  assert.equal(env.tabs.get(1).url, page.url);
+});
+test('unsafe palette navigation fails before creating or modifying tabs', async () => {
+  const env = setup();
+  await assert.rejects(env.app.dispatch({ type: 'OPEN_INPUT', input: 'javascript:alert(1)', windowId: 1, workspaceId: 'home' }), /http/);
+  assert.equal(env.tabs.size, 1);
+  assert.deepEqual(env.events, []);
+});
+test('palette new-tab and save-current commands use the parent browser window', async () => {
+  const env = setup([{ ...page, active: true, windowId: 9 }]);
+  await env.app.dispatch({ type: 'SAVE_CURRENT', windowId: 9, workspaceId: 'home' });
+  assert.equal(env.local.ama.workspaces[0].resources[0].url, page.url);
+  const tab = await env.app.dispatch({ type: 'NEW_TAB', windowId: 9, workspaceId: 'home' });
+  assert.equal(tab.windowId, 9);
+  assert.ok(env.tabs.get(tab.id).groupId >= 0);
+  assert.equal(env.control.focusedWindow, 9);
+});
+
 test('archive is durable before a tab closes, and survives worker recreation', async () => {
   const env = setup();
   await env.app.dispatch({ type: 'TAB_ARCHIVE', tabId: 1 });

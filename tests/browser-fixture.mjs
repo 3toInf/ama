@@ -26,13 +26,15 @@ for (const name of ['local', 'session']) {
   };
 }
 const controller = createController(env.api);
+const paletteMode = new URLSearchParams(location.search).get('test') === 'palette';
 globalThis.chrome = {
   ...env.api,
   runtime: { id: 'ama-test', async sendMessage(message) {
     try { return { ok: true, data: await controller.dispatch(message) }; }
     catch (error) { return { ok: false, error: error.message }; }
   }, onMessage: event() },
-  windows: { ...env.api.windows, async getCurrent() { return { id: 1 }; } },
+  windows: { ...env.api.windows, async getCurrent() { return { id: paletteMode ? 50 : 1 }; },
+    async remove(id) { globalThis.__closedWindow = id; } },
   storage: { ...env.api.storage, onChanged: storageChanged },
   tabs: { ...env.api.tabs, onCreated: event(), onUpdated: event(), onRemoved: event(), onActivated: event(), onMoved: event() },
   tabGroups: { ...env.api.tabGroups, onUpdated: event(), onRemoved: event() },
@@ -40,4 +42,4 @@ globalThis.chrome = {
 globalThis.__ama = env;
 // Reproduce a shortcut message arriving before the panel registers its listener.
 chrome.runtime.onMessage.emit({ type: 'FOCUS_SEARCH', windowId: 1 });
-await import('../extension/panel.js');
+await import(paletteMode ? '../extension/palette.js' : '../extension/panel.js');
