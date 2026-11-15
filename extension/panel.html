@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AMA 工作区</title>
+  <link rel="stylesheet" href="panel.css">
+  <script type="module" src="panel.js"></script>
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand"><span class="brand-mark" aria-hidden="true">a</span><div><strong>AMA</strong><span class="eyebrow">给浏览留一点秩序</span></div></div>
+      <span class="local-badge"><span></span>本地保存</span>
+    </header>
+    <div class="search-box"><span aria-hidden="true">⌕</span><input id="search" type="search" placeholder="搜索标签、链接和归档" aria-label="搜索标签、链接和归档" autocomplete="off"><kbd title="打开侧栏">⌥ ⇧ K</kbd></div>
+    <nav class="view-tabs" aria-label="页面导航">
+      <button type="button" data-view="workspace" class="selected">工作台</button>
+      <button type="button" data-view="archive">归档 <span id="archive-count">0</span></button>
+      <button type="button" data-view="settings">设置</button>
+    </nav>
+    <div id="error" class="notice error" role="alert" hidden></div>
+    <main>
+      <section id="workspace-view">
+        <div class="section-heading"><span class="eyebrow">我的工作区</span><button id="new-workspace" class="text-button" type="button">＋ 新建</button></div>
+        <nav id="workspaces" class="workspace-list" aria-label="选择工作区"></nav>
+        <div class="workspace-title"><div><h1 id="workspace-title">日常</h1><p id="workspace-subtitle">整理常用链接，让临时页面自由流动。</p></div><button id="edit-workspace" class="icon-button" type="button" title="编辑工作区" aria-label="编辑工作区">···</button></div>
+        <div class="quick-actions"><button id="save-current" type="button" class="primary">＋ 保存当前页</button><button id="new-resource" type="button" class="secondary">添加链接</button></div>
+        <section class="collection"><div class="section-heading"><h2>常用链接 <span id="resource-count" class="count">0</span></h2></div><div id="resources"></div></section>
+        <section class="collection"><div class="section-heading"><h2>工作区标签 <span id="tab-count" class="count">0</span></h2><button id="save-snapshot" class="text-button" type="button">保存快照</button></div><div id="tabs"></div><div id="snapshot" class="snapshot"></div></section>
+        <section class="collection"><div class="section-heading"><h2>未收入工作区</h2><span class="hint">点击 ＋ 收入</span></div><div id="unassigned"></div></section>
+        <p class="footnote">工作区使用当前窗口的标签组。切换时保留网页，不隔离登录账号。</p>
+      </section>
+      <section id="archive-view" hidden><div class="workspace-title"><div><h1>留存，再出发</h1><p>关掉的网页，随时可以找回来。</p></div></div><div id="archive-list"></div><p class="footnote">归档保存网址，不保留未提交的输入或页面运行状态。</p></section>
+      <section id="search-view" hidden><div class="section-heading"><h1>搜索结果</h1><span id="search-count" class="count"></span></div><div id="search-results"></div></section>
+      <section id="settings-view" hidden>
+        <div class="workspace-title"><div><h1>让它适合你</h1><p>所有设置和链接都保存在这台浏览器中。</p></div></div>
+        <form id="settings-form" class="card">
+          <div class="section-heading"><h2>自动归档</h2><label class="switch"><input id="auto-archive" type="checkbox" aria-label="启用自动归档"><span></span></label></div>
+          <p class="hint">保留活跃、固定、播放音频的标签和常用链接。归档后，未保存的输入无法恢复。</p>
+          <label class="field">闲置时间<select id="archive-hours"><option value="1">1 小时</option><option value="6">6 小时</option><option value="12">12 小时</option><option value="24">24 小时</option><option value="168">7 天</option><option value="720">30 天</option></select></label>
+          <button type="submit" class="primary">保存设置</button>
+        </form>
+        <section class="card"><h2>域名路由</h2><p class="hint">在打开或导航网页时，将匹配域名及子域名的标签收入指定工作区。</p><div id="rules"></div><form id="rule-form"><label class="field">域名<input name="domain" placeholder="例如 github.com" maxlength="253" required></label><label class="field">目标工作区<select name="workspaceId" id="rule-workspace"></select></label><button class="secondary" type="submit">添加路由</button></form></section>
+        <section class="card"><h2>备份与迁移</h2><p class="hint">导出工作区、链接、快照和归档。导入时合并数据，保留现有设置。</p><div class="quick-actions"><button id="export" type="button" class="secondary">导出 JSON</button><button id="import" type="button" class="secondary">合并导入</button><input id="import-file" type="file" accept="application/json,.json" hidden></div></section>
+        <section class="card"><h2>键盘与轻量浏览</h2><p class="hint">Alt + Shift + K 打开侧栏。快捷键可在 Chrome 扩展快捷键设置中修改。右键点击网页链接，可以选择“在轻量窗口中打开”或保存到工作区。</p><p class="hint">AMA 0.1.0 · 无账号 · 无云端上传</p></section>
+      </section>
+    </main>
+    <footer><span id="archive-status">自动归档已暂停</span><span>少一点杂乱，多一点专注。</span></footer>
+  </div>
+  <div id="toast" role="status" aria-live="polite" hidden></div>
+  <dialog id="workspace-dialog"><form id="workspace-form"><div class="section-heading"><h2 id="workspace-dialog-title">新建工作区</h2><button class="icon-button" type="button" data-close aria-label="关闭">×</button></div><label class="field">工作区名称<input name="name" maxlength="80" placeholder="例如 项目灵感" required></label><label class="field">标记颜色<select name="color"><option value="purple">紫色</option><option value="blue">蓝色</option><option value="green">绿色</option><option value="pink">粉色</option><option value="orange">橙色</option><option value="grey">灰色</option></select></label><div class="dialog-actions"><button id="delete-workspace" class="danger-button" type="button" hidden>删除工作区</button><button type="submit" class="primary">保存</button></div></form></dialog>
+  <dialog id="resource-dialog"><form id="resource-form"><div class="section-heading"><h2>保存常用链接</h2><button class="icon-button" type="button" data-close aria-label="关闭">×</button></div><label class="field">标题<input name="title" maxlength="500" placeholder="给链接一个好找的名字" required></label><label class="field">网址<input name="url" type="url" maxlength="8192" placeholder="https://" required></label><label class="field">文件夹<input name="folder" maxlength="80" placeholder="可选，例如 参考资料" list="folder-names"></label><datalist id="folder-names"></datalist><div class="dialog-actions"><button type="submit" class="primary">保存链接</button></div></form></dialog>
+</body>
+</html>
