@@ -27,7 +27,9 @@
 4. 固定 AMA 扩展图标并点击，或按 `Alt+Shift+K` 打开侧栏。
 5. 从“未收入工作区”的标签旁点击 `＋`，开始整理。自动归档需要到设置页手动开启。
 
-若使用 ZIP，将 `dist/ama-0.1.0.zip` 解压后加载包含 `manifest.json` 的目录。扩展尚未发布到商店，安装和最终浏览器验收需在自己的 Chrome 中完成。若快捷键冲突，在 `chrome://extensions/shortcuts` 修改。
+若使用 ZIP，将 `dist/ama-0.1.1.zip` 解压后加载包含 `manifest.json` 的目录。扩展尚未发布到商店，安装和最终浏览器验收需在自己的 Chrome 中完成。若快捷键冲突，在 `chrome://extensions/shortcuts` 修改。
+
+目前只有 `Alt+Shift+K`（macOS 为 `Option+Shift+K`）打开侧栏搜索，没有 Arc 风格的 `Cmd+T` 命令面板。`Cmd+T` / `Ctrl+T` 仍由 Chrome 打开新标签。分屏拖放和分屏快照也尚未实现；后续可使用 Chrome 155+ 的原生两页分屏 API，在 AMA 侧栏内提供拖放配对。
 
 ## 开发与检查
 
@@ -44,13 +46,15 @@ npm run package
 
 2026-11-15 更新环境权限后，浏览器烟雾测试已通过：创建工作区、保存链接、移动标签、快照、搜索、设置、恶意标题文本渲染和 360px 布局均完成验证。截图位于 `/tmp/ama-panel-smoke.png`。测试使用真实 Chrome 页面及模拟 Chrome API，真实扩展安装、原生标签组及快捷键仍需进一步验收。
 
-已通过 30 项数据与控制器测试，以及 Manifest、资源引用、语法和 ZIP 完整性检查。当前待完善的界面细节：首次用快捷键打开侧栏时搜索框可能未聚焦；后台错误需重开侧栏才显示；刷新列表会重新展开已折叠的资源文件夹。
+v0.1.1 已通过 32 项数据、控制器与后台事件测试，以及浏览器流程测试和 6 项 UI 回归检查。Manifest、资源引用、语法和 ZIP 完整性检查通过。
+
+已修复：侧栏首次加载后聚焦搜索，后续快捷键仅聚焦对应窗口；后台错误即时显示，包括重复发生的相同错误；文件夹展开状态按工作区保留，在当前侧栏打开期间刷新列表或切换工作区都不会重置。
 
 ## Git 状态
 
 项目源码、测试和 `.gitignore` 已创建。此前 `.git` 只读导致初始化失败；2026-11-15 更新环境权限后，已成功执行 `git init -b main`，仓库当前使用 `main` 分支。
 
-没有创建远程仓库，也没有推送代码。`.gitignore` 排除 `.aws`、`.codex`、`.agents`、环境文件和构建产物。
+远程仓库为 [3toInf/ama](https://github.com/3toInf/ama)，`origin` 使用 `git@github.com:3toInf/ama.git`。`.gitignore` 排除 `.aws`、`.codex`、`.agents`、环境文件和构建产物。
 
 ## 文件结构
 

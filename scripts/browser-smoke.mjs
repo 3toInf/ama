@@ -70,12 +70,51 @@ try {
   };
   await until('document.querySelectorAll(".workspace-chip").length === 1', 'workspace renders');
   assert.equal(await evaluate('Boolean(window.pwned || document.querySelector("#resources img"))'), false);
+  const uiFailures = [];
+  const check = async (name, task) => {
+    try { await task(); console.log(`UI regression passed: ${name}`); }
+    catch (error) { uiFailures.push(`${name}: ${error.message}`); console.error(`UI regression failed: ${name}: ${error.message}`); }
+  };
+  await check('cold panel focuses search even when the shortcut message arrived too early', async () => {
+    assert.equal(await evaluate('document.activeElement.id'), 'search');
+  });
+  await check('focus messages only affect the intended window', async () => {
+    await evaluate('document.querySelector("#new-workspace").focus(); chrome.runtime.onMessage.emit({type:"FOCUS_SEARCH",windowId:2})');
+    assert.equal(await evaluate('document.activeElement.id'), 'new-workspace');
+    await evaluate('chrome.runtime.onMessage.emit({type:"FOCUS_SEARCH",windowId:1})');
+    assert.equal(await evaluate('document.activeElement.id'), 'search');
+  });
+  await check('background errors display without reopening the panel', async () => {
+    await evaluate('chrome.storage.session.set({amaError:"background test failure"})');
+    await until('!document.querySelector("#error").hidden && document.querySelector("#error").textContent.includes("background test failure")', 'live background error');
+  });
+  await check('identical error messages can be displayed again after a successful action', async () => {
+    await evaluate('chrome.storage.session.set({amaError:{id:"first",message:"repeat test failure"}})');
+    await until('document.querySelector("#error").textContent.includes("repeat test failure")', 'first error occurrence');
+    await evaluate('document.querySelector(".workspace-chip").click()');
+    await until('document.querySelector("#error").hidden', 'successful action clears visible error');
+    await evaluate('chrome.storage.session.set({amaError:{id:"second",message:"repeat test failure"}})');
+    await until('!document.querySelector("#error").hidden && document.querySelector("#error").textContent.includes("repeat test failure")', 'repeated error occurrence');
+  });
+  await check('collapsed folders survive tab-driven refreshes', async () => {
+    await evaluate('document.querySelector("#resources summary").click(); window.__oldFolder=document.querySelector("#resources details"); chrome.tabs.onUpdated.emit(1,{title:"updated"})');
+    await until('document.querySelector("#resources details") !== window.__oldFolder', 'folder rerender');
+    assert.equal(await evaluate('document.querySelector("#resources details").open'), false);
+  });
   await evaluate('document.querySelector("#new-workspace").click(); document.querySelector("#workspace-form [name=name]").value="研究"; document.querySelector("#workspace-form").requestSubmit()');
   await until('document.querySelectorAll(".workspace-chip").length === 2', 'workspace creation');
   await evaluate('document.querySelector("#save-current").click()');
   await until('document.querySelector("#resource-dialog").open', 'resource dialog');
-  await evaluate('document.querySelector("#resource-form").requestSubmit()');
+  await evaluate('document.querySelector("#resource-form [name=folder]").value="参考资料"; document.querySelector("#resource-form").requestSubmit()');
   await until('document.querySelector("#resources").textContent.includes("Chrome extension")', 'saved link');
+  await check('folder expansion is independent per workspace and survives switching', async () => {
+    assert.equal(await evaluate('document.querySelector("#resources details").open'), true);
+    await evaluate('document.querySelectorAll(".workspace-chip")[0].click()');
+    await until('document.querySelector("#workspace-title").textContent === "日常"', 'switch to home');
+    assert.equal(await evaluate('document.querySelector("#resources details").open'), false);
+  });
+  await evaluate('document.querySelectorAll(".workspace-chip")[1].click()');
+  await until('document.querySelector("#workspace-title").textContent === "研究"', 'switch back to research');
   await evaluate('document.querySelector("#unassigned [data-action=move]").click()');
   await until('document.querySelectorAll("#tabs .row").length === 1', 'tab moves into workspace');
   await evaluate('document.querySelector("#save-snapshot").click()');
@@ -90,6 +129,7 @@ try {
   const screenshotPath = '/tmp/ama-panel-smoke.png';
   await writeFile(screenshotPath, Buffer.from(screenshot.data, 'base64'));
   assert.deepEqual(errors, []);
+  assert.deepEqual(uiFailures, [], 'UI regression failures');
   console.log(`Browser smoke passed: create workspace, save link, move tab, snapshot, search, settings, XSS text handling, 360px layout.\nScreenshot: ${screenshotPath}\nChrome APIs use the test adapter; this is not a live-profile installation test.`);
 } finally {
   if (browser && browser.exitCode === null) {

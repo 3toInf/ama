@@ -11,6 +11,8 @@ let settingsDirty = false;
 let refreshVersion = 0;
 let refreshTimer;
 let toastTimer;
+const folderExpansion = new Map();
+const isOptionsPage = new URLSearchParams(location.search).get('view') === 'settings';
 
 function element(tag, className, content) {
   const node = document.createElement(tag);
@@ -29,6 +31,11 @@ function notify(message) {
 function showError(error) {
   $('#error').textContent = error.message || String(error);
   $('#error').hidden = false;
+}
+
+function showBackgroundError(value) {
+  const message = typeof value === 'string' ? value : value?.message;
+  if (message) showError(new Error(`后台操作未完成：${message}`));
 }
 
 async function request(type, payload = {}) {
@@ -111,6 +118,10 @@ function row(item, kind, owner) {
 
 function renderResources() {
   const target = $('#resources');
+  // Capture the old DOM before replacing it, including a toggle followed by an immediate refresh.
+  for (const folder of target.querySelectorAll('details[data-folder-key]')) {
+    folderExpansion.set(folder.dataset.folderKey, folder.open);
+  }
   target.replaceChildren();
   const resources = workspace().resources;
   $('#resource-count').textContent = resources.length;
@@ -125,7 +136,9 @@ function renderResources() {
   }
   for (const [name, entries] of folders) {
     const folder = element('details', 'folder');
-    folder.open = true;
+    const key = JSON.stringify([workspace().id, name]);
+    folder.dataset.folderKey = key;
+    folder.open = folderExpansion.get(key) ?? true;
     folder.append(element('summary', '', `${name} · ${entries.length}`));
     entries.forEach(item => folder.append(row(item, 'resource', currentWorkspace)));
     target.append(folder);
@@ -339,15 +352,23 @@ $('#import-file').addEventListener('change', event => run(async () => {
   await action('IMPORT', { backup }, '数据已合并，原有设置已保留');
 }));
 
-chrome.storage.onChanged.addListener(scheduleRefresh);
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName === 'session' && changes.amaError?.newValue) {
+    showBackgroundError(changes.amaError.newValue);
+  }
+  scheduleRefresh();
+});
 for (const event of [chrome.tabs.onCreated, chrome.tabs.onUpdated, chrome.tabs.onRemoved,
   chrome.tabs.onActivated, chrome.tabs.onMoved, chrome.tabGroups.onUpdated, chrome.tabGroups.onRemoved]) {
   event.addListener(scheduleRefresh);
 }
-chrome.runtime.onMessage.addListener(message => { if (message.type === 'FOCUS_SEARCH') $('#search').focus(); });
+chrome.runtime.onMessage.addListener(message => {
+  if (!isOptionsPage && message.type === 'FOCUS_SEARCH' && message.windowId === targetWindow) $('#search').focus();
+});
 run(async () => {
   targetWindow = (await chrome.windows.getCurrent()).id;
   await refresh();
+  if (!isOptionsPage) $('#search').focus();
   const { amaError } = await chrome.storage.session.get('amaError');
-  if (amaError) showError(new Error(`后台操作未完成：${amaError}`));
+  showBackgroundError(amaError);
 });

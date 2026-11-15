@@ -5,7 +5,9 @@ let menuQueue = Promise.resolve();
 
 async function setError(error) {
   console.error('AMA:', error);
-  await chrome.storage.session.set({ amaError: String(error.message || error).slice(0, 300) });
+  await chrome.storage.session.set({ amaError: {
+    id: crypto.randomUUID(), message: String(error.message || error).slice(0, 300),
+  } });
 }
 
 async function menus() {
@@ -49,8 +51,10 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
 chrome.commands.onCommand.addListener((command, tab) => {
   if (command === 'open-workspace' && tab?.windowId !== undefined) {
     // Keep this in the user-gesture call stack; awaiting other work would lose permission to open.
-    chrome.sidePanel.open({ windowId: tab.windowId }).catch(setError);
-    chrome.runtime.sendMessage({ type: 'FOCUS_SEARCH' }).catch(() => {});
+    chrome.sidePanel.open({ windowId: tab.windowId }).then(() => {
+      // A new panel also focuses on startup if its listener is not ready yet.
+      return chrome.runtime.sendMessage({ type: 'FOCUS_SEARCH', windowId: tab.windowId }).catch(() => {});
+    }).catch(setError);
   }
 });
 
