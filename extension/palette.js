@@ -5,7 +5,12 @@ const input = document.querySelector('#palette-input');
 const list = document.querySelector('#palette-list');
 const error = document.querySelector('#palette-error');
 const closeButton = document.querySelector('#palette-close');
-const windowParameter = new URLSearchParams(location.search).get('windowId');
+const parameters = new URLSearchParams(location.search);
+const windowParameter = parameters.get('windowId');
+const embedded = window.top !== window;
+const overlayToken = parameters.get('overlayToken');
+const popupToken = parameters.get('popupToken');
+document.documentElement.dataset.host = embedded ? 'overlay' : 'popup';
 const parentWindowId = windowParameter && /^\d+$/u.test(windowParameter) ? Number(windowParameter) : null;
 let ownWindowId;
 let data;
@@ -13,14 +18,44 @@ let workspaceId;
 let items = [];
 let selected = 0;
 let busy = false;
+let lastOverlayHeight;
+let resizeFrame;
 
-function showError(value) { error.textContent = value.message || String(value); error.hidden = false; }
+function resizeOverlay() {
+  if (!embedded || !data) return;
+  cancelAnimationFrame(resizeFrame);
+  resizeFrame = requestAnimationFrame(() => {
+    // Measure intrinsic list content so a short query can expand again when cleared.
+    const height = Math.ceil(document.querySelector('.query').offsetHeight + document.querySelector('footer').offsetHeight
+      + 16 + Math.min(list.scrollHeight, 352) + (error.hidden ? 0 : error.offsetHeight + 14)
+      + (document.querySelector('#palette-empty').hidden ? 0 : document.querySelector('#palette-empty').offsetHeight));
+    if (height !== lastOverlayHeight) {
+      lastOverlayHeight = height;
+      request({ type: 'PALETTE_RESIZE', height }).catch(() => {});
+    }
+  });
+}
+function showError(value) { error.textContent = value.message || String(value); error.hidden = false; resizeOverlay(); }
 async function request(action) {
-  const response = await chrome.runtime.sendMessage({ ...action, windowId: parentWindowId });
+  const response = await chrome.runtime.sendMessage({ ...action, windowId: parentWindowId,
+    ...(embedded ? { overlayToken } : { popupToken, paletteWindowId: ownWindowId }) });
   if (!response?.ok) throw new Error(response?.error || '无法连接 AMA，请重新加载扩展。');
   return response.data;
 }
-async function close() { if (ownWindowId !== undefined) await chrome.windows.remove(ownWindowId); }
+async function close(restoreFocus = true) {
+  await request({ type: 'PALETTE_CLOSE', restoreFocus });
+}
+function resultDetail(item) {
+  if (item.pageUrl) {
+    try {
+      const url = new URL(item.pageUrl);
+      if (url.protocol === 'chrome-extension:') return '扩展页面';
+      if (url.protocol === 'chrome:') return `chrome://${url.hostname}`;
+      return url.hostname.replace(/^www\./u, '') || (item.detail === item.title ? '' : item.detail);
+    } catch { /* Use the text description. */ }
+  }
+  return item.kind === 'workspace' ? '工作区' : item.kind === 'command' ? '' : item.detail;
+}
 function select(index) {
   selected = Math.max(0, Math.min(index, items.length - 1));
   [...list.children].forEach((node, i) => node.setAttribute('aria-selected', String(i === selected)));
@@ -41,6 +76,7 @@ function render() {
     option.className = 'palette-option';
     option.id = `palette-option-${index}`;
     option.setAttribute('role', 'option');
+    option.title = `${item.title}\n${item.detail}`;
     const icon = document.createElement('span');
     icon.className = 'palette-icon';
     icon.setAttribute('aria-hidden', 'true');
@@ -50,11 +86,16 @@ function render() {
     const title = document.createElement('strong');
     title.textContent = item.title;
     const detail = document.createElement('small');
-    detail.textContent = item.detail;
+    detail.textContent = resultDetail(item);
     copy.append(title, detail);
     const enter = document.createElement('span');
     enter.className = 'palette-enter';
-    enter.textContent = '↵';
+    enter.setAttribute('aria-hidden', 'true');
+    const actionLabel = document.createElement('span');
+    actionLabel.textContent = { tab: '切换标签', resource: '打开链接', workspace: '切换工作区', archive: '恢复网页', command: '执行命令', navigate: '打开' }[item.kind];
+    const key = document.createElement('kbd');
+    key.textContent = '↵';
+    enter.append(actionLabel, key);
     option.append(icon, copy, enter);
     option.addEventListener('mouseenter', () => select(index));
     option.addEventListener('click', () => execute(item));
@@ -63,6 +104,7 @@ function render() {
   document.querySelector('#palette-empty').hidden = items.length > 0 || !error.hidden;
   document.querySelector('#palette-count').textContent = `${items.length} 项`;
   select(0);
+  resizeOverlay();
 }
 async function execute(item) {
   if (busy || !item) return;
@@ -72,11 +114,13 @@ async function execute(item) {
   try {
     await request(item.action);
     await chrome.windows.update(parentWindowId, { focused: true });
-    await close();
+    await close(false);
   } catch (failure) { showError(failure); }
   finally { busy = false; input.disabled = closeButton.disabled = false; input.focus(); }
 }
 async function load(reset = false) {
+  if (embedded && !overlayToken) throw new Error('请使用 AMA 快捷键打开命令面板。');
+  if (!embedded && !popupToken) throw new Error('请使用 AMA 快捷键打开命令面板。');
   if (parentWindowId === null) throw new Error('请使用快捷键或 AMA 侧栏打开命令面板。');
   data = await request({ type: 'READ' });
   workspaceId = data.session.active.find(item => item.windowId === parentWindowId)?.workspaceId ?? data.state.workspaces[0].id;
@@ -100,9 +144,14 @@ document.addEventListener('keydown', event => {
 });
 closeButton.addEventListener('click', () => { if (!busy) close().catch(showError); });
 chrome.runtime.onMessage.addListener(message => {
-  if (message.type === 'RESET_PALETTE' && message.paletteWindowId === ownWindowId && !busy) load(true).catch(showError);
+  if (!embedded && message.type === 'RESET_PALETTE' && message.paletteWindowId === ownWindowId && !busy) load(true).catch(showError);
 });
 (async () => {
-  ownWindowId = (await chrome.windows.getCurrent()).id;
+  if (!embedded) ownWindowId = (await chrome.windows.getCurrent()).id;
   await load();
+  if (embedded) {
+    await request({ type: 'PALETTE_READY' });
+    new ResizeObserver(resizeOverlay).observe(document.querySelector('#palette-surface'));
+    resizeOverlay();
+  }
 })().catch(showError);

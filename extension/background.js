@@ -1,5 +1,6 @@
 import { createController } from './controller.js';
-import { openPalette } from './palette-window.js';
+import { openPalette, dispatchPopupMessage } from './palette-window.js';
+import { dispatchOverlayMessage, dismissOverlaySession } from './palette-overlay.js';
 
 const controller = createController(chrome);
 let menuQueue = Promise.resolve();
@@ -41,8 +42,13 @@ chrome.alarms.get('ama-archive').then(alarm => {
 }).catch(setError);
 
 chrome.runtime.onMessage.addListener((message, sender, respond) => {
-  if (sender.id !== chrome.runtime.id || !sender.url?.startsWith(chrome.runtime.getURL(''))) return false;
-  const operation = message.type === 'PALETTE_OPEN' ? openPalette(chrome, message.windowId) : controller.dispatch(message);
+  if (sender.id !== chrome.runtime.id) return false;
+  let operation;
+  if (message.type === 'PALETTE_DISMISSED') operation = dismissOverlaySession(chrome, message, sender);
+  else if (!sender.url?.startsWith(chrome.runtime.getURL(''))) return false;
+  else if (sender.frameId > 0 || message.overlayToken) operation = dispatchOverlayMessage(chrome, message, sender, controller.dispatch);
+  else if (sender.url.split(/[?#]/u)[0] === chrome.runtime.getURL('palette.html')) operation = dispatchPopupMessage(chrome, message, sender, controller.dispatch);
+  else operation = message.type === 'PALETTE_OPEN' ? openPalette(chrome, message.windowId) : controller.dispatch(message);
   operation.then(data => {
     respond({ ok: true, data });
     if (['WORKSPACE_CREATE', 'WORKSPACE_RENAME', 'WORKSPACE_DELETE', 'IMPORT'].includes(message.type)) scheduleMenus();
@@ -83,3 +89,5 @@ chrome.alarms.onAlarm.addListener(alarm => {
 chrome.tabs.onUpdated.addListener((id, change) => {
   if (change.url || change.status === 'complete') controller.route(id).catch(setError);
 });
+chrome.tabs.onRemoved?.addListener(id => { chrome.storage.session.remove(`amaPalette:${id}`).catch(setError); });
+chrome.windows.onRemoved?.addListener(id => { chrome.storage.session.remove(`amaPalettePopup:${id}`).catch(setError); });

@@ -4,6 +4,12 @@ import { inputIntent, paletteItems } from '../extension/palette-model.js';
 import { openPalette } from '../extension/palette-window.js';
 import { createState } from '../extension/core.js';
 
+function sessionStorage() {
+  const data = {};
+  return { async get(key) { return { [key]: data[key] }; }, async set(values) { Object.assign(data, values); } };
+}
+
+
 test('palette distinguishes HTTP URLs, bare domains and ordinary search text', () => {
   assert.deepEqual(inputIntent(' example.com/docs '), { kind: 'url', url: 'https://example.com/docs' });
   assert.deepEqual(inputIntent('https://example.com/a?q=1'), { kind: 'url', url: 'https://example.com/a?q=1' });
@@ -46,6 +52,7 @@ test('a protected URL can still select an existing tab without offering navigati
 test('concurrent palette requests share one popup for the same parent window', async () => {
   const created = [];
   const api = {
+    storage: { session: sessionStorage() },
     runtime: { getURL: path => `chrome-extension://ama/${path}` },
     windows: {
       async get() { return { left: 0, top: 0, width: 1000, height: 800 }; },
@@ -62,6 +69,7 @@ test('palette opens centered over the originating window and reuses its existing
   const windows = [];
   const focused = [];
   const api = {
+    storage: { session: sessionStorage() },
     runtime: { getURL: path => `chrome-extension://ama/${path}`, async sendMessage() {} },
     windows: {
       async get(id) { assert.equal(id, 9); return { id, type: 'normal', left: -1200, top: 100, width: 1200, height: 900 }; },

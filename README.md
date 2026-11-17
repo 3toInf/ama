@@ -31,9 +31,9 @@
 4. 固定 AMA 扩展图标并点击，或按 `Alt+Shift+K` 打开侧栏。
 5. 将鼠标移到“未收入工作区”的标签上，点击 `＋`，开始整理。自动归档需要到设置页手动开启。
 
-若使用 ZIP，将 `dist/ama-0.3.0.zip` 解压后加载包含 `manifest.json` 的目录。扩展尚未发布到商店。更新已有安装时，在 `chrome://extensions` 点击 AMA 的重新加载按钮；此版本新增 `favicon` 权限，如 Chrome 提示权限变更，请重新启用扩展。
+若使用 ZIP，将 `dist/ama-0.4.0.zip` 解压后加载包含 `manifest.json` 的目录。扩展尚未发布到商店。更新已有安装时，在 `chrome://extensions` 点击 AMA 的重新加载按钮；此版本新增 `activeTab` 和 `scripting` 权限，如 Chrome 提示权限变更，请重新启用扩展。
 
-命令面板为一个居中的独立扩展弹窗，可以在普通网页和 Chrome 内部页面上使用。使用 ↑ / ↓ 选择、Enter 执行、Esc 关闭；也可点击侧栏顶部的命令图标或“新建标签页”。它不是网页内覆盖层，`Cmd+T` / `Ctrl+T` 仍打开 Chrome 新标签页。`Alt+Shift+K`（Mac 为 `Option+Shift+K`）继续打开侧栏搜索。快捷键冲突或没有自动分配时，在 `chrome://extensions/shortcuts` 设置 AMA 的“打开命令面板”。
+命令面板优先显示为网页内的无外框浮层：圆角、柔和阴影、背景模糊，结果区域随内容收缩或展开。使用 ↑ / ↓ 选择、Enter 执行、Esc 或点击外部关闭；也可点击侧栏顶部的命令图标或“新建标签页”。在 `chrome://` 页面、扩展不允许注入的网站，或当前网页尚未获得临时访问权限时，使用独立弹窗作为回退，保留系统外框。普通网页上请优先用 `Cmd+Shift+K` / `Ctrl+Shift+K` 唤起，它同时授予当前页的临时访问权限。`Cmd+T` / `Ctrl+T` 仍打开 Chrome 新标签页。`Alt+Shift+K`（Mac 为 `Option+Shift+K`）继续打开侧栏搜索。快捷键冲突或没有自动分配时，在 `chrome://extensions/shortcuts` 设置 AMA 的“打开命令面板”。
 
 ## 开发与检查
 
@@ -45,6 +45,7 @@ npm run check
 npm run test:browser
 npm run test:native
 npm run test:ui
+npm run test:overlay
 npm run package
 ```
 
@@ -59,6 +60,8 @@ npm run package
 已修复：侧栏首次加载后聚焦搜索，后续快捷键仅聚焦对应窗口；后台错误即时显示，包括重复发生的相同错误；文件夹展开状态按工作区保留，在当前侧栏打开期间刷新列表或切换工作区都不会重置。
 
 侧栏中的图钉用于保存常用链接；顶部图标网格对应 Chrome 原生固定标签。工作区快照和分屏说明收在“工作区工具”中。归档、设置和新增工作区入口在底部。键盘聚焦标签时也会显示操作按钮。
+
+`npm run test:overlay` 验证页内浮层的尺寸收缩/恢复、键盘与外部点击关闭、焦点恢复、重复唤起、执行命令以及未授权页面拒绝。由于无界面 Chrome 的 CDP 工具栏动作不会授予 `activeTab`，测试仅在临时扩展副本中增加本地样例地址权限；正式扩展没有持久网站访问权限。真实 Mac 快捷键授权仍需手动验收。浮层预览在 `dist/previews/palette-overlay-light.png` 和 `palette-overlay-dark.png`。
 
 ## Git 状态
 
@@ -77,7 +80,8 @@ extension/
   split.js           原生分屏约束与操作
   split-drag.js      侧栏拖放交互
   palette-model.js   命令、搜索结果与网址输入判定
-  palette-window.js  来源窗口定位、弹窗创建与复用
+  palette-window.js  浮层优先、回退弹窗创建与会话校验
+  palette-overlay.js 页内浮层、临时授权与生命周期
   palette.html/js/css 命令面板界面
   panel.html/js/css  中文侧栏界面
   theme.css          工作区主题、亮色和暗色变量
@@ -89,7 +93,7 @@ docs/                设计、计划与开发记录
 
 ## 权限与数据
 
-扩展申请 `storage`、`tabs`、`tabGroups`、`sidePanel`、`alarms`、`contextMenus`、`search`、`favicon`。它读取标签的标题和网址来提供管理功能，不读取网站 cookies、密码或正文，不申请全站脚本注入权限。只有执行网页搜索时，查询才通过 Chrome 发送至浏览器配置的搜索引擎。网站图标通过扩展自身的 `_favicon` 地址读取 Chrome 缓存，不使用第三方图标服务。持久数据位于 `chrome.storage.local`，当前会话的窗口和组绑定位于 `chrome.storage.session`。卸载扩展会删除本地数据，请先导出需要保留的链接。
+扩展申请 `storage`、`tabs`、`tabGroups`、`sidePanel`、`alarms`、`contextMenus`、`search`、`favicon`、`activeTab`、`scripting`。它读取标签的标题和网址来提供管理功能，不读取网站 cookies、密码或正文，不申请全站脚本注入权限。只有执行网页搜索时，查询才通过 Chrome 发送至浏览器配置的搜索引擎。网站图标通过扩展自身的 `_favicon` 地址读取 Chrome 缓存，不使用第三方图标服务。无框浮层仅在唤起时注入，界面运行于独立的扩展来源 iframe，网页无法读取其中的搜索输入和结果；后台操作校验与当前标签绑定的临时会话。持久数据位于 `chrome.storage.local`，当前会话的窗口和组绑定位于 `chrome.storage.session`。卸载扩展会删除本地数据，请先导出需要保留的链接。
 
 数据容量：最多 200 个工作区，每区 2000 条常用链接、每份快照 500 个网址，总计 2000 条归档、100 条域名规则。单份导入文件和全部持久数据的备份均最多 2 MB；每次写入前检查实际紧凑 JSON 的字节数，确保导出的备份符合导入文件上限。合并超过任一限制时整次拒绝，保留原数据，不静默截断。
 

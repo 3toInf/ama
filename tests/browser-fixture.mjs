@@ -30,7 +30,10 @@ const paletteMode = new URLSearchParams(location.search).get('test') === 'palett
 globalThis.chrome = {
   ...env.api,
   runtime: { id: 'ama-test', getURL: path => new URL(`../extension${path}`, import.meta.url).href, async sendMessage(message) {
-    try { return { ok: true, data: await controller.dispatch(message) }; }
+    try {
+      if (message.type === 'PALETTE_CLOSE') { globalThis.__closedWindow = 50; return { ok: true, data: {} }; }
+      return { ok: true, data: await controller.dispatch(message) };
+    }
     catch (error) { return { ok: false, error: error.message }; }
   }, onMessage: event() },
   windows: { ...env.api.windows, async getCurrent() { return { id: paletteMode ? 50 : 1 }; },

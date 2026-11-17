@@ -46,6 +46,9 @@ await withChrome(async ({ send, attach, errors }) => {
   assert.ok(paletteTarget, 'worker creates a real extension popup');
   const palette = await attach(paletteTarget.targetId);
   await palette.until('document.querySelectorAll("#palette-list [role=option]").length > 0', 'native palette');
+  await palette.evaluate('globalThis.__beforeReload=true');
+  await send('Page.reload', {}, palette.sessionId);
+  await palette.until('!globalThis.__beforeReload && document.querySelectorAll("#palette-list [role=option]").length > 0 && !document.querySelector("#palette-error").textContent', 'owned popup survives reload');
   assert.equal(await palette.evaluate('document.activeElement.id'), 'palette-input');
   const screenshot = await send('Page.captureScreenshot', { format: 'png' }, palette.sessionId);
   await writeFile('/tmp/ama-palette-native.png', Buffer.from(screenshot.data, 'base64'));

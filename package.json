@@ -1,6 +1,6 @@
 {
   "name": "ama-browser-workspace",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
   "description": "Local-first Chrome workspace extension inspired by Arc",
@@ -11,6 +11,7 @@
     "test:browser": "node scripts/browser-smoke.mjs",
     "test:native": "node scripts/native-smoke.mjs",
     "test:ui": "node scripts/ui-smoke.mjs",
+    "test:overlay": "node scripts/overlay-smoke.mjs",
     "package": "python3 scripts/package.py"
   }
 }

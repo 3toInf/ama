@@ -1,10 +1,11 @@
 {
   "manifest_version": 3,
   "name": "AMA 工作区",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "工作区、拖放分屏与键盘命令面板：管理链接、搜索标签、归档与恢复。工作区数据保存在本地。",
   "minimum_chrome_version": "121",
-  "permissions": ["storage", "tabs", "tabGroups", "sidePanel", "alarms", "contextMenus", "search", "favicon"],
+  "permissions": ["storage", "tabs", "tabGroups", "sidePanel", "alarms", "contextMenus", "search", "favicon", "activeTab", "scripting"],
+  "web_accessible_resources": [{ "resources": ["palette.html"], "matches": ["http://*/*", "https://*/*"] }],
   "background": { "service_worker": "background.js", "type": "module" },
   "side_panel": { "default_path": "panel.html" },
   "action": { "default_title": "打开 AMA 工作区" },

@@ -201,7 +201,7 @@ try {
     .replace('src="palette.js"', `src="${pathToFileURL(join(root, 'tests/browser-fixture.mjs'))}"`);
   await writeFile(paletteHarness, paletteHtml);
   await send('Emulation.setDeviceMetricsOverride', { width: 680, height: 520, deviceScaleFactor: 1, mobile: false }, sessionId);
-  await send('Page.navigate', { url: `${pathToFileURL(paletteHarness).href}?test=palette&windowId=1` }, sessionId);
+  await send('Page.navigate', { url: `${pathToFileURL(paletteHarness).href}?test=palette&windowId=1&popupToken=test-popup` }, sessionId);
   await until('document.querySelectorAll("#palette-list [role=option]").length > 0', 'palette ready');
   await check('palette keyboard navigation selects a tab, while IME Enter does not execute', async () => {
     assert.equal(await evaluate('document.activeElement.id'), 'palette-input');
