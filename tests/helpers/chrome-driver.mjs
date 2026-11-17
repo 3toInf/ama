@@ -9,7 +9,7 @@ export async function withChrome(task) {
   const temporary = await mkdtemp(join(tmpdir(), 'ama-native-'));
   const browser = spawn(process.env.CHROME_PATH || 'google-chrome', [
     '--headless=new', '--no-sandbox', '--disable-dev-shm-usage', '--no-first-run', '--no-default-browser-check',
-    '--disable-background-networking', '--enable-unsafe-extension-debugging', '--remote-debugging-pipe',
+    '--disable-background-networking', '--no-proxy-server', '--enable-unsafe-extension-debugging', '--remote-debugging-pipe',
     `--user-data-dir=${temporary}`, 'about:blank',
   ], { stdio: ['ignore', 'ignore', 'pipe', 'pipe', 'pipe'] });
   const pending = new Map();
@@ -51,8 +51,8 @@ export async function withChrome(task) {
       if (response.exceptionDetails) throw new Error(response.exceptionDetails.exception?.description || response.exceptionDetails.text);
       return response.result.value;
     };
-    const until = async (expression, label) => {
-      for (let i = 0; i < 100; i++) { if (await evaluate(expression)) return; await pause(50); }
+    const until = async (expression, label, timeoutMs = 5000) => {
+      for (let i = 0; i < Math.ceil(timeoutMs / 50); i++) { if (await evaluate(expression)) return; await pause(50); }
       throw new Error(`Timed out: ${label}`);
     };
     return { sessionId, evaluate, until };

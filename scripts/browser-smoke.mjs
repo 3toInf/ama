@@ -69,7 +69,7 @@ try {
     throw new Error(`Timed out: ${label}; page errors: ${errors.join('; ')}`);
   };
   await until('document.querySelectorAll(".workspace-chip").length === 1', 'workspace renders');
-  assert.equal(await evaluate('Boolean(window.pwned || document.querySelector("#resources img"))'), false);
+  assert.equal(await evaluate('Boolean(window.pwned || document.querySelector("#resources img[src=x]"))'), false);
   const uiFailures = [];
   const check = async (name, task) => {
     try { await task(); console.log(`UI regression passed: ${name}`); }
@@ -100,6 +100,26 @@ try {
     await evaluate('document.querySelector("#resources summary").click(); window.__oldFolder=document.querySelector("#resources details"); chrome.tabs.onUpdated.emit(1,{title:"updated"})');
     await until('document.querySelector("#resources details") !== window.__oldFolder', 'folder rerender');
     assert.equal(await evaluate('document.querySelector("#resources details").open'), false);
+  });
+  await check('keyboard focus and row actions survive background tab refreshes', async () => {
+    await evaluate('document.querySelector("#unassigned .row-content").focus(); window.__focusedRow=document.activeElement; chrome.tabs.onUpdated.emit(1,{title:"refreshed"})');
+    await until('!window.__focusedRow.isConnected', 'focused row rerenders');
+    assert.equal(await evaluate('document.activeElement.classList.contains("row-content")'), true);
+    assert.equal(await evaluate('getComputedStyle(document.activeElement.closest(".row").querySelector(".row-actions")).visibility'), 'visible');
+  });
+  await check('a focused action button survives a background refresh', async () => {
+    await evaluate('document.querySelector("#unassigned .row-content").focus(); document.querySelector("#unassigned [data-action=move]").focus(); window.__focusedAction=document.activeElement; chrome.tabs.onUpdated.emit(1,{title:"refreshed again"})');
+    await until('!window.__focusedAction.isConnected', 'action rerenders');
+    assert.equal(await evaluate('document.activeElement.dataset.action'), 'move');
+  });
+  await check('search focus restores to the visible result instead of a hidden workspace row', async () => {
+    try {
+      await evaluate('document.querySelector("#search").value="chrome"; document.querySelector("#search").dispatchEvent(new Event("input")); document.querySelector("#search-results .row-content").focus(); window.__focusedResult=document.activeElement; chrome.tabs.onUpdated.emit(1,{title:"search refresh"})');
+      await until('!window.__focusedResult.isConnected', 'result rerenders');
+      assert.equal(await evaluate('Boolean(document.activeElement.closest("#search-results"))'), true);
+    } finally {
+      await evaluate('document.querySelector("#search").value=""; document.querySelector("#search").dispatchEvent(new Event("input"))');
+    }
   });
   await check('dragging one tab onto another creates a split and Unsplit retains both tabs', async () => {
     assert.equal(await evaluate('document.querySelectorAll("#unassigned .row")[1].draggable'), true);
@@ -202,7 +222,7 @@ try {
   });
   await check('palette renders malicious saved titles as text and opens typed URLs', async () => {
     await evaluate('document.querySelector("#palette-input").value="<img"; document.querySelector("#palette-input").dispatchEvent(new Event("input"))');
-    assert.equal(await evaluate('Boolean(window.pwned || document.querySelector("#palette-list img"))'), false);
+    assert.equal(await evaluate('Boolean(window.pwned || document.querySelector("#palette-list img[src=x]"))'), false);
     await evaluate('document.querySelector("#palette-input").value="open-this.example/docs"; document.querySelector("#palette-input").dispatchEvent(new Event("input")); document.querySelector("#palette-input").dispatchEvent(new KeyboardEvent("keydown",{key:"Enter",bubbles:true}))');
     await until('window.__closedWindow === 50', 'typed URL closes palette');
     assert.equal(await evaluate('[...window.__ama.tabs.values()].some(tab=>tab.url==="https://open-this.example/docs" && tab.windowId===1)'), true);

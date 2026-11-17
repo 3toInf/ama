@@ -25,18 +25,18 @@ export function paletteItems(data, query, workspaceId) {
   ];
   const items = commandsOnly ? commands : [
     ...[...data.tabs].sort((a, b) => (b.lastAccessed ?? 0) - (a.lastAccessed ?? 0)).map(tab => ({
-      id: `tab:${tab.id}`, kind: 'tab', title: tab.title || tab.url || '新标签页', detail: tab.url || '',
+      id: `tab:${tab.id}`, kind: 'tab', title: tab.title || tab.url || '新标签页', detail: tab.url || '', pageUrl: tab.url,
       action: { type: 'TAB_FOCUS', tabId: tab.id },
     })),
     ...data.state.workspaces.flatMap(owner => owner.resources.map(resource => ({
-      id: `resource:${owner.id}:${resource.id}`, kind: 'resource', title: resource.title,
+      id: `resource:${owner.id}:${resource.id}`, kind: 'resource', title: resource.title, pageUrl: resource.url,
       detail: `${owner.name} · ${resource.folder || '常用链接'} · ${resource.url}`,
       action: { type: 'RESOURCE_OPEN', workspaceId: owner.id, resourceId: resource.id },
     }))),
     ...data.state.workspaces.map(owner => ({ id: `workspace:${owner.id}`, kind: 'workspace', title: owner.name,
       detail: '切换工作区 · Switch workspace', action: { type: 'WORKSPACE_SWITCH', workspaceId: owner.id } })),
     ...data.state.archive.map(item => ({ id: `archive:${item.id}`, kind: 'archive', title: item.title,
-      detail: `恢复归档 · ${item.url}`, action: { type: 'ARCHIVE_RESTORE', archiveId: item.id } })),
+      detail: `恢复归档 · ${item.url}`, pageUrl: item.url, action: { type: 'ARCHIVE_RESTORE', archiveId: item.id } })),
     ...commands,
   ];
   const filtered = searchItems(items.map(item => ({ ...item, url: item.detail })), commandsOnly ? term.slice(1) : term).slice(0, 40);

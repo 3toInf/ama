@@ -4,6 +4,8 @@
 
 ## 功能
 
+- **Arc 风格侧栏**：工作区主题底色、紧凑标签行、文件夹与常用链接、底部工作区切换；支持浅色和深色。Chrome 固定标签显示为顶部图标网格。
+- **网站图标**：标签、常用链接、归档、搜索和命令面板使用 Chrome 缓存中的 favicon；缺失或不支持的页面显示地球图标。
 - **工作区**：新建、重命名、删除；以当前窗口的 Chrome 标签组管理页面。切换展开目标组、折叠其他 AMA 组，保留页面运行状态。
 - **常用链接与文件夹**：保存当前页或输入网址；常用链接不参与自动归档。
 - **搜索**：当前窗口标签、全部工作区常用链接和归档，支持标题、域名、文件夹和中文组合查询。
@@ -27,11 +29,11 @@
 2. 开启右上角“开发者模式”。
 3. 点击“加载已解压的扩展程序”，选择本项目的 **extension** 目录。
 4. 固定 AMA 扩展图标并点击，或按 `Alt+Shift+K` 打开侧栏。
-5. 从“未收入工作区”的标签旁点击 `＋`，开始整理。自动归档需要到设置页手动开启。
+5. 将鼠标移到“未收入工作区”的标签上，点击 `＋`，开始整理。自动归档需要到设置页手动开启。
 
-若使用 ZIP，将 `dist/ama-0.2.0.zip` 解压后加载包含 `manifest.json` 的目录。扩展尚未发布到商店。更新已有安装时，在 `chrome://extensions` 点击 AMA 的重新加载按钮；此版本新增 `search` 权限，如 Chrome 提示权限变更，请重新启用扩展。
+若使用 ZIP，将 `dist/ama-0.3.0.zip` 解压后加载包含 `manifest.json` 的目录。扩展尚未发布到商店。更新已有安装时，在 `chrome://extensions` 点击 AMA 的重新加载按钮；此版本新增 `favicon` 权限，如 Chrome 提示权限变更，请重新启用扩展。
 
-命令面板为一个居中的独立扩展弹窗，可以在普通网页和 Chrome 内部页面上使用。使用 ↑ / ↓ 选择、Enter 执行、Esc 关闭；也可点击侧栏的“命令面板”。它不是网页内覆盖层，`Cmd+T` / `Ctrl+T` 仍打开 Chrome 新标签页。`Alt+Shift+K`（Mac 为 `Option+Shift+K`）继续打开侧栏搜索。快捷键冲突或没有自动分配时，在 `chrome://extensions/shortcuts` 设置 AMA 的“打开命令面板”。
+命令面板为一个居中的独立扩展弹窗，可以在普通网页和 Chrome 内部页面上使用。使用 ↑ / ↓ 选择、Enter 执行、Esc 关闭；也可点击侧栏顶部的命令图标或“新建标签页”。它不是网页内覆盖层，`Cmd+T` / `Ctrl+T` 仍打开 Chrome 新标签页。`Alt+Shift+K`（Mac 为 `Option+Shift+K`）继续打开侧栏搜索。快捷键冲突或没有自动分配时，在 `chrome://extensions/shortcuts` 设置 AMA 的“打开命令面板”。
 
 ## 开发与检查
 
@@ -42,6 +44,7 @@ npm test
 npm run check
 npm run test:browser
 npm run test:native
+npm run test:ui
 npm run package
 ```
 
@@ -51,11 +54,15 @@ npm run package
 
 浏览器 DOM 测试覆盖原有流程、拖放配对、工作区同步、命令面板键盘操作、中文输入法 Enter 保护及错误显示。截图位于 `/tmp/ama-panel-smoke.png` 和 `/tmp/ama-palette-native.png`。当前完整验证记录见 `docs/development-log.md`。
 
+`npm run test:ui` 加载真实扩展并访问本地样例网站，检查 Chrome favicon 缓存中的实际像素、失败回退、固定标签点击、命令面板图标、工作区颜色切换、键盘操作和 280/320/360px 布局。浅色、深色和窄侧栏截图保存在 `dist/previews/`；其中的名称和网站图标是测试数据。首次访问样例页最多等待 30 秒，不依赖外部网站。
+
 已修复：侧栏首次加载后聚焦搜索，后续快捷键仅聚焦对应窗口；后台错误即时显示，包括重复发生的相同错误；文件夹展开状态按工作区保留，在当前侧栏打开期间刷新列表或切换工作区都不会重置。
+
+侧栏中的图钉用于保存常用链接；顶部图标网格对应 Chrome 原生固定标签。工作区快照和分屏说明收在“工作区工具”中。归档、设置和新增工作区入口在底部。键盘聚焦标签时也会显示操作按钮。
 
 ## Git 状态
 
-项目源码、测试和 `.gitignore` 已创建。此前 `.git` 只读导致初始化失败；2026-11-15 更新环境权限后，已成功执行 `git init -b main`，仓库当前使用 `main` 分支。
+项目源码、测试和 `.gitignore` 已创建。此前 `.git` 只读导致初始化失败；2026-11-15 更新环境权限后，已成功执行 `git init -b main`，初始分支为 `main`；本轮 UI 调整位于用户选择的 `feat_style` 分支。
 
 远程仓库为 [3toInf/ama](https://github.com/3toInf/ama)，`origin` 使用 `git@github.com:3toInf/ama.git`。`.gitignore` 排除 `.aws`、`.codex`、`.agents`、环境文件和构建产物。
 
@@ -73,7 +80,8 @@ extension/
   palette-window.js  来源窗口定位、弹窗创建与复用
   palette.html/js/css 命令面板界面
   panel.html/js/css  中文侧栏界面
-  theme.css          亮色和暗色变量
+  theme.css          工作区主题、亮色和暗色变量
+  icons.js           本地 SVG 控件图标与 Chrome favicon
 tests/               数据与控制器测试、浏览器适配器
 scripts/             检查、浏览器烟雾测试和 ZIP 打包
 docs/                设计、计划与开发记录
@@ -81,7 +89,7 @@ docs/                设计、计划与开发记录
 
 ## 权限与数据
 
-扩展申请 `storage`、`tabs`、`tabGroups`、`sidePanel`、`alarms`、`contextMenus`、`search`。它读取标签的标题和网址来提供管理功能，不读取网站 cookies、密码或正文，不申请全站脚本注入权限。只有执行网页搜索时，查询才通过 Chrome 发送至浏览器配置的搜索引擎。持久数据位于 `chrome.storage.local`，当前会话的窗口和组绑定位于 `chrome.storage.session`。卸载扩展会删除本地数据，请先导出需要保留的链接。
+扩展申请 `storage`、`tabs`、`tabGroups`、`sidePanel`、`alarms`、`contextMenus`、`search`、`favicon`。它读取标签的标题和网址来提供管理功能，不读取网站 cookies、密码或正文，不申请全站脚本注入权限。只有执行网页搜索时，查询才通过 Chrome 发送至浏览器配置的搜索引擎。网站图标通过扩展自身的 `_favicon` 地址读取 Chrome 缓存，不使用第三方图标服务。持久数据位于 `chrome.storage.local`，当前会话的窗口和组绑定位于 `chrome.storage.session`。卸载扩展会删除本地数据，请先导出需要保留的链接。
 
 数据容量：最多 200 个工作区，每区 2000 条常用链接、每份快照 500 个网址，总计 2000 条归档、100 条域名规则。单份导入文件和全部持久数据的备份均最多 2 MB；每次写入前检查实际紧凑 JSON 的字节数，确保导出的备份符合导入文件上限。合并超过任一限制时整次拒绝，保留原数据，不静默截断。
 

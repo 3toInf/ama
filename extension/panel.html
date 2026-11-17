@@ -10,33 +10,30 @@
 <body>
   <div class="app">
     <header class="topbar">
-      <div class="brand"><span class="brand-mark" aria-hidden="true">a</span><div><strong>AMA</strong><span class="eyebrow">给浏览留一点秩序</span></div></div>
-      <span class="local-badge"><span></span>本地保存</span>
+      <div class="search-box"><span data-icon="search"></span><input id="search" type="search" placeholder="搜索标签和链接" aria-label="搜索标签、链接和归档" autocomplete="off"><button id="open-palette" class="icon-button" type="button" title="打开命令面板" aria-label="打开命令面板"><span data-icon="command"></span></button></div>
     </header>
-    <div class="search-box"><span aria-hidden="true">⌕</span><input id="search" type="search" placeholder="搜索标签、链接和归档" aria-label="搜索标签、链接和归档" autocomplete="off"><kbd title="打开侧栏">⌥ ⇧ K</kbd></div>
-    <button id="open-palette" class="palette-launcher" type="button"><span>⌘ 命令面板</span><kbd id="palette-shortcut">Ctrl ⇧ K</kbd></button>
-    <nav class="view-tabs" aria-label="页面导航">
-      <button type="button" data-view="workspace" class="selected">工作台</button>
-      <button type="button" data-view="archive">归档 <span id="archive-count">0</span></button>
-      <button type="button" data-view="settings">设置</button>
-    </nav>
     <div id="error" class="notice error" role="alert" hidden></div>
     <main>
       <section id="workspace-view">
-        <div class="section-heading"><span class="eyebrow">我的工作区</span><button id="new-workspace" class="text-button" type="button">＋ 新建</button></div>
-        <nav id="workspaces" class="workspace-list" aria-label="选择工作区"></nav>
-        <div class="workspace-title"><div><h1 id="workspace-title">日常</h1><p id="workspace-subtitle">整理常用链接，让临时页面自由流动。</p></div><button id="edit-workspace" class="icon-button" type="button" title="编辑工作区" aria-label="编辑工作区">···</button></div>
-        <div class="quick-actions"><button id="save-current" type="button" class="primary">＋ 保存当前页</button><button id="new-resource" type="button" class="secondary">添加链接</button></div>
-        <section class="collection"><div class="section-heading"><h2>常用链接 <span id="resource-count" class="count">0</span></h2></div><div id="resources"></div></section>
-        <section class="collection"><div class="section-heading"><h2>工作区标签 <span id="tab-count" class="count">0</span></h2><button id="save-snapshot" class="text-button" type="button">保存快照</button></div><div id="tabs"></div><div id="snapshot" class="snapshot"></div></section>
-        <section class="collection"><div class="section-heading"><h2>未收入工作区</h2><span class="hint">点击 ＋ 收入</span></div><div id="unassigned"></div></section>
-        <p id="split-hint" class="footnote"></p>
-        <p class="footnote">工作区使用当前窗口的标签组。切换时保留网页，不隔离登录账号。</p>
+        <div id="favorites" class="favorites" role="group" aria-label="Chrome 固定标签" hidden></div>
+        <div class="workspace-title"><div class="workspace-name"><span class="space-symbol" data-icon="panel"></span><h1 id="workspace-title">日常</h1></div><button id="edit-workspace" class="icon-button" type="button" title="编辑工作区" aria-label="编辑工作区" data-icon="more"></button></div>
+        <p id="workspace-subtitle" class="sr-only"></p>
+        <section class="collection saved-collection" aria-label="常用链接">
+          <div class="section-heading collection-label"><h2>常用链接 <span id="resource-count" class="count">0</span></h2><div class="inline-actions"><button id="save-current" type="button" class="icon-button" title="保存当前页" aria-label="保存当前页" data-icon="pin"></button><button id="new-resource" type="button" class="icon-button" title="添加链接" aria-label="添加链接" data-icon="plus"></button></div></div>
+          <div id="resources"></div>
+        </section>
+        <section class="collection tabs-collection" aria-label="工作区标签">
+          <button id="new-tab" class="new-tab" type="button"><span data-icon="plus"></span><span>新建标签页</span><kbd id="palette-shortcut">Ctrl ⇧ K</kbd></button>
+          <div id="tabs"></div>
+          <span id="tab-count" class="sr-only">0</span>
+        </section>
+        <section id="unassigned-section" class="collection"><div class="section-heading collection-label"><h2>未收入工作区</h2></div><div id="unassigned"></div></section>
+        <details class="workspace-tools"><summary>工作区工具</summary><button id="save-snapshot" class="text-button" type="button">保存当前标签快照</button><div id="snapshot" class="snapshot"></div><p id="split-hint" class="footnote"></p><p class="footnote">工作区使用当前窗口的标签组。切换时保留网页，不隔离登录账号。</p></details>
       </section>
-      <section id="archive-view" hidden><div class="workspace-title"><div><h1>留存，再出发</h1><p>关掉的网页，随时可以找回来。</p></div></div><div id="archive-list"></div><p class="footnote">归档保存网址，不保留未提交的输入或页面运行状态。</p></section>
+      <section id="archive-view" hidden><div class="page-title"><h1>归档</h1><p>最近收起的网页。</p></div><div id="archive-list"></div><p class="footnote">归档保存网址，不保留未提交的输入或页面运行状态。</p></section>
       <section id="search-view" hidden><div class="section-heading"><h1>搜索结果</h1><span id="search-count" class="count"></span></div><div id="search-results"></div></section>
       <section id="settings-view" hidden>
-        <div class="workspace-title"><div><h1>让它适合你</h1><p>所有设置和链接都保存在这台浏览器中。</p></div></div>
+        <div class="page-title"><h1>设置</h1><p>让 AMA 适合你的浏览习惯。</p></div>
         <form id="settings-form" class="card">
           <div class="section-heading"><h2>自动归档</h2><label class="switch"><input id="auto-archive" type="checkbox" aria-label="启用自动归档"><span></span></label></div>
           <p class="hint">保留活跃、分屏、固定、播放音频的标签和常用链接。归档后，未保存的输入无法恢复。</p>
@@ -45,10 +42,15 @@
         </form>
         <section class="card"><h2>域名路由</h2><p class="hint">在打开或导航网页时，将匹配域名及子域名的标签收入指定工作区。</p><div id="rules"></div><form id="rule-form"><label class="field">域名<input name="domain" placeholder="例如 github.com" maxlength="253" required></label><label class="field">目标工作区<select name="workspaceId" id="rule-workspace"></select></label><button class="secondary" type="submit">添加路由</button></form></section>
         <section class="card"><h2>备份与迁移</h2><p class="hint">导出工作区、链接、快照和归档。导入时合并数据，保留现有设置。</p><div class="quick-actions"><button id="export" type="button" class="secondary">导出 JSON</button><button id="import" type="button" class="secondary">合并导入</button><input id="import-file" type="file" accept="application/json,.json" hidden></div></section>
-        <section class="card"><h2>键盘与轻量浏览</h2><p class="hint">⌘ + Shift + K（Mac）或 Ctrl + Shift + K 打开命令面板；Alt / Option + Shift + K 打开侧栏。命令面板使用 ↑ ↓ 选择、Enter 执行、Esc 关闭。快捷键可在 Chrome 扩展快捷键设置中修改。右键网页链接可打开轻量窗口或保存到工作区。</p><p class="hint">AMA 0.2.0 · 无账号 · 工作区本地保存</p></section>
+        <section class="card"><h2>键盘与轻量浏览</h2><p class="hint">⌘ + Shift + K（Mac）或 Ctrl + Shift + K 打开命令面板；Alt / Option + Shift + K 打开侧栏。命令面板使用 ↑ ↓ 选择、Enter 执行、Esc 关闭。快捷键可在 Chrome 扩展快捷键设置中修改。右键网页链接可打开轻量窗口或保存到工作区。</p><p class="hint">AMA 0.3.0 · 无账号 · 工作区本地保存</p></section>
       </section>
     </main>
-    <footer><span id="archive-status">自动归档已暂停</span><span>少一点杂乱，多一点专注。</span></footer>
+    <footer class="workspace-dock">
+      <nav class="view-tabs" aria-label="页面导航"><button type="button" data-view="workspace" class="icon-button selected" title="工作区" aria-label="工作区" data-icon="panel"></button><button type="button" data-view="archive" class="icon-button" title="归档" aria-label="归档"><span data-icon="archive"></span><span id="archive-count" class="sr-only">0</span></button><button type="button" data-view="settings" class="icon-button" title="设置" aria-label="设置" data-icon="settings"></button></nav>
+      <nav id="workspaces" class="workspace-list" aria-label="选择工作区"></nav>
+      <button id="new-workspace" class="icon-button" type="button" title="新建工作区" aria-label="新建工作区" data-icon="plus"></button>
+      <span id="archive-status" class="sr-only">自动归档已暂停</span>
+    </footer>
   </div>
   <div id="toast" role="status" aria-live="polite" hidden></div>
   <dialog id="workspace-dialog"><form id="workspace-form"><div class="section-heading"><h2 id="workspace-dialog-title">新建工作区</h2><button class="icon-button" type="button" data-close aria-label="关闭">×</button></div><label class="field">工作区名称<input name="name" maxlength="80" placeholder="例如 项目灵感" required></label><label class="field">标记颜色<select name="color"><option value="purple">紫色</option><option value="blue">蓝色</option><option value="green">绿色</option><option value="pink">粉色</option><option value="orange">橙色</option><option value="grey">灰色</option></select></label><div class="dialog-actions"><button id="delete-workspace" class="danger-button" type="button" hidden>删除工作区</button><button type="submit" class="primary">保存</button></div></form></dialog>

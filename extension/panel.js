@@ -1,6 +1,7 @@
 import { searchItems, MAX_BACKUP_BYTES, COLORS } from './core.js';
 import { isSplit } from './split.js';
 import { attachSplitDrag } from './split-drag.js';
+import { icon, siteIcon, hydrateIcons } from './icons.js';
 
 const $ = selector => document.querySelector(selector);
 const colors = { grey: '#99919f', blue: '#6a8bbc', red: '#c86b74', yellow: '#baa358', green: '#79a18a', pink: '#bd88a6', purple: '#9781b4', cyan: '#63a9b4', orange: '#c48d66' };
@@ -59,6 +60,8 @@ function run(task) { Promise.resolve().then(task).catch(showError); }
 
 function button(label, title, handler, actionName) {
   const node = element('button', '', label);
+  const symbol = { '↗': 'external', '×': 'close', '↶': 'restore', '◧': 'unsplit', '◫': 'split', '＋': 'plus', '☆': 'pin', '↓': 'archive' }[label];
+  if (symbol) node.replaceChildren(icon(symbol));
   node.type = 'button';
   node.title = title;
   node.setAttribute('aria-label', title);
@@ -84,21 +87,32 @@ function workspace() { return data.state.workspaces.find(item => item.id === cur
 function workspaceName(id) { return data.state.workspaces.find(item => item.id === id)?.name || '未分组'; }
 
 function row(item, kind, owner) {
-  const node = element('div', `row${item.active ? ' active' : ''}`);
+  const active = item.active || (kind === 'resource' && data.tabs.some(tab => tab.active && tab.url === item.url));
+  const node = element('div', `row ${kind}${active ? ' active' : ''}`);
   if (kind === 'tab' || kind === 'unassigned') node.dataset.tabId = item.id;
-  const icon = element('span', 'page-icon', hostname(item.url).replace(/^www\./u, '').slice(0, 1).toUpperCase() || '↗');
-  icon.setAttribute('aria-hidden', 'true');
-  const content = button('', item.title || item.url, async () => {
+  const content = button('', `${item.title || item.url}\n${item.url || ''}`, async () => {
     if (kind === 'resource') await action('RESOURCE_OPEN', { workspaceId: owner, resourceId: item.id });
     if (kind === 'tab' || kind === 'unassigned') await action('TAB_FOCUS', { tabId: item.id });
     if (kind === 'archive') await action('ARCHIVE_RESTORE', { archiveId: item.id }, '页面已恢复');
   });
   content.className = 'row-content';
-  content.append(element('strong', '', item.title || item.url));
+  const focusKey = JSON.stringify([kind === 'unassigned' ? 'tab' : kind, owner || '', item.id]);
+  content.dataset.focusKey = `${focusKey}:open`;
+  if (active) content.setAttribute('aria-current', 'page');
+  const copy = element('span', 'row-copy');
+  copy.append(element('strong', '', item.title || item.url || '新标签页'));
   const detail = [hostname(item.url), item.workspaceName];
   if ((kind === 'tab' || kind === 'unassigned') && isSplit(item)) detail.push('分屏中');
   if (kind === 'archive') detail.push(new Date(item.archivedAt).toLocaleDateString());
-  content.append(element('small', '', detail.filter(Boolean).join(' · ')));
+  copy.append(element('small', '', detail.filter(Boolean).join(' · ')));
+  content.append(siteIcon(item.url), copy);
+  if (isSplit(item) || item.audible) {
+    const status = element('span', 'tab-status');
+    status.title = isSplit(item) ? '分屏中' : '正在播放音频';
+    status.setAttribute('aria-label', status.title);
+    status.append(icon(isSplit(item) ? 'split' : 'volume'));
+    content.append(status);
+  }
   const actions = element('div', 'row-actions');
   if (kind === 'resource') {
     actions.append(button('↗', '在轻量窗口中打开', () => action('PEEK', { url: item.url })));
@@ -131,7 +145,9 @@ function row(item, kind, owner) {
     actions.append(button('☆', '保存为常用链接', () => openResourceDialog(item)));
     if (!item.pinned && !item.audible) actions.append(button('↓', '归档此标签，未保存输入不会保留', () => action('TAB_ARCHIVE', { tabId: item.id }, '已归档，可随时找回'), 'archive'));
   }
-  node.append(icon, content, actions);
+  node.style.setProperty('--action-count', actions.children.length);
+  for (const control of actions.children) control.dataset.focusKey = `${focusKey}:${control.title}`;
+  node.append(content, actions);
   return node;
 }
 
@@ -144,7 +160,7 @@ function renderResources() {
   target.replaceChildren();
   const resources = workspace().resources;
   $('#resource-count').textContent = resources.length;
-  if (!resources.length) return empty(target, '把常用网站留在这里', '链接会一直保留，也不会被自动归档。');
+  if (!resources.length) return empty(target, '常用网站，留在这里', '点击图钉保存当前页');
   const folders = new Map();
   for (const resource of resources) {
     if (!resource.folder) target.append(row(resource, 'resource', currentWorkspace));
@@ -158,29 +174,48 @@ function renderResources() {
     const key = JSON.stringify([workspace().id, name]);
     folder.dataset.folderKey = key;
     folder.open = folderExpansion.get(key) ?? true;
-    folder.append(element('summary', '', `${name} · ${entries.length}`));
+    const summary = element('summary');
+    summary.dataset.focusKey = `folder:${key}`;
+    summary.append(icon('chevron'), icon('folder'), element('span', 'folder-name', name), element('span', 'count', entries.length));
+    folder.append(summary);
     entries.forEach(item => folder.append(row(item, 'resource', currentWorkspace)));
     target.append(folder);
   }
 }
 
-function renderWorkspaces() {
+function renderDock() {
   const list = $('#workspaces');
   list.replaceChildren();
   for (const item of data.state.workspaces) {
     const chip = button('', `切换到 ${item.name}`, async () => {
+      view = 'workspace';
+      $('#search').value = '';
       await action('WORKSPACE_SWITCH', { workspaceId: item.id });
       currentWorkspace = item.id;
       render();
     });
     chip.className = `workspace-chip${item.id === currentWorkspace ? ' selected' : ''}`;
+    chip.dataset.focusKey = `workspace:${item.id}`;
     chip.setAttribute('aria-pressed', String(item.id === currentWorkspace));
-    const dot = element('span', 'dot');
-    dot.style.backgroundColor = colors[item.color] || colors.purple;
-    chip.append(dot, element('span', '', item.name));
+    chip.style.setProperty('--chip-color', colors[item.color] || colors.purple);
+    chip.append(element('span', 'workspace-initial', Array.from(item.name)[0]), element('span', 'sr-only', item.name));
     list.append(chip);
   }
+  document.documentElement.dataset.spaceColor = workspace().color;
+}
+
+function renderWorkspaces() {
   const item = workspace();
+  const favorites = data.tabs.filter(tab => tab.pinned);
+  $('#favorites').hidden = !favorites.length;
+  $('#favorites').replaceChildren(...favorites.map(tab => {
+    const tile = button('', `${tab.title || tab.url}\n${tab.url || ''}`, () => action('TAB_FOCUS', { tabId: tab.id }));
+    tile.className = `favorite${tab.active ? ' active' : ''}`;
+    tile.dataset.focusKey = `favorite:${tab.id}`;
+    if (tab.active) tile.setAttribute('aria-current', 'page');
+    tile.append(siteIcon(tab.url));
+    return tile;
+  }));
   $('#split-hint').textContent = data.capabilities?.splitView
     ? '将一个标签拖到另一个标签上以分屏，或点击 ◫。两个标签须在同一标签组。'
     : '当前 Chrome 尚不支持扩展分屏。其他工作区功能可继续使用。';
@@ -190,11 +225,11 @@ function renderWorkspaces() {
   $('#workspace-subtitle').textContent = `${item.resources.length} 个常用链接 · ${tabs.length} 个打开的标签`;
   $('#tabs').replaceChildren(...tabs.map(tab => row(tab, 'tab')));
   $('#tab-count').textContent = tabs.length;
-  if (!tabs.length) empty($('#tabs'), '这一刻，留点空白', '从下方收入标签，或打开一个常用链接。');
   const groups = new Set(data.session.groups.filter(group => group.windowId === targetWindow).map(group => group.groupId));
-  const unassigned = data.tabs.filter(tab => !groups.has(tab.groupId));
+  const unassigned = data.tabs.filter(tab => !tab.pinned && !groups.has(tab.groupId));
   $('#unassigned').replaceChildren(...unassigned.map(tab => row(tab, 'unassigned')));
-  if (!unassigned.length) empty($('#unassigned'), '都整理好了');
+  $('#unassigned-section').hidden = !unassigned.length;
+  if (!tabs.length && !unassigned.length) empty($('#tabs'), '开始新的浏览', '打开常用链接，或新建标签页');
   $('#snapshot').replaceChildren();
   if (item.snapshot) {
     $('#snapshot').append(element('span', '', `${new Date(item.snapshot.savedAt).toLocaleDateString()} · ${item.snapshot.tabs.length} 个网页`));
@@ -238,7 +273,9 @@ function renderSearch(query) {
 
 function render() {
   if (!data) return;
+  const focusKey = document.activeElement?.dataset.focusKey;
   if (!data.state.workspaces.some(item => item.id === currentWorkspace)) currentWorkspace = data.state.workspaces[0].id;
+  renderDock();
   const query = $('#search').value.trim();
   for (const name of ['workspace', 'archive', 'settings', 'search']) $(`#${name}-view`).hidden = query ? name !== 'search' : name !== view;
   document.querySelectorAll('[data-view]').forEach(node => {
@@ -246,6 +283,7 @@ function render() {
     node.setAttribute('aria-current', node.dataset.view === view && !query ? 'page' : 'false');
   });
   $('#archive-count').textContent = data.state.archive.length;
+  $('[data-view="archive"]').title = `归档 · ${data.state.archive.length} 个网页`;
   $('#archive-status').textContent = data.state.settings.autoArchive ? `闲置 ${data.state.settings.archiveHours} 小时后归档` : '自动归档已暂停';
   if (query) renderSearch(query);
   else if (view === 'workspace') renderWorkspaces();
@@ -253,6 +291,14 @@ function render() {
   else {
     $('#archive-list').replaceChildren(...data.state.archive.map(item => row(item, 'archive')));
     if (!data.state.archive.length) empty($('#archive-list'), '还没有归档的网页', '归档标签后，会出现在这里。');
+  }
+  // Tab events rebuild these lists. Keep a keyboard user's place in the new DOM.
+  if (focusKey) {
+    const control = [...document.querySelectorAll('[data-focus-key]')]
+      .find(node => node.dataset.focusKey === focusKey && !node.closest('[hidden]'));
+    // Actions become visible through :focus-within; reveal the row before focusing one.
+    if (control?.closest('.row-actions')) control.closest('.row').querySelector('.row-content').focus({ preventScroll: true });
+    control?.focus({ preventScroll: true });
   }
 }
 
@@ -289,6 +335,9 @@ document.querySelectorAll('[data-view]').forEach(node => node.addEventListener('
 $('#search').addEventListener('input', render);
 $('#palette-shortcut').textContent = navigator.platform.includes('Mac') ? '⌘ ⇧ K' : 'Ctrl ⇧ K';
 $('#open-palette').addEventListener('click', () => run(() => request('PALETTE_OPEN')));
+$('#new-tab').addEventListener('click', () => run(() => request('PALETTE_OPEN')));
+$('#open-palette').title = `打开命令面板 · ${$('#palette-shortcut').textContent}`;
+hydrateIcons();
 document.querySelectorAll('[data-close]').forEach(node => node.addEventListener('click', () => node.closest('dialog').close()));
 $('#new-workspace').addEventListener('click', () => {
   editingWorkspace = null;

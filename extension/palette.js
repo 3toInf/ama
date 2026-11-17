@@ -1,4 +1,5 @@
 import { paletteItems } from './palette-model.js';
+import { icon as uiIcon, siteIcon, hydrateIcons } from './icons.js';
 
 const input = document.querySelector('#palette-input');
 const list = document.querySelector('#palette-list');
@@ -43,7 +44,7 @@ function render() {
     const icon = document.createElement('span');
     icon.className = 'palette-icon';
     icon.setAttribute('aria-hidden', 'true');
-    icon.textContent = { tab: '▣', resource: '☆', workspace: '◉', command: '⌘', archive: '↶', navigate: '↗' }[item.kind];
+    icon.append(item.pageUrl ? siteIcon(item.pageUrl) : uiIcon({ workspace: 'panel', command: 'command', navigate: 'search' }[item.kind] || 'globe'));
     const copy = document.createElement('span');
     copy.className = 'palette-copy';
     const title = document.createElement('strong');
@@ -81,11 +82,13 @@ async function load(reset = false) {
   workspaceId = data.session.active.find(item => item.windowId === parentWindowId)?.workspaceId ?? data.state.workspaces[0].id;
   if (!data.state.workspaces.some(item => item.id === workspaceId)) workspaceId = data.state.workspaces[0].id;
   document.querySelector('#palette-workspace').textContent = data.state.workspaces.find(item => item.id === workspaceId).name;
+  document.documentElement.dataset.spaceColor = data.state.workspaces.find(item => item.id === workspaceId).color;
   if (reset) input.value = '';
   render();
   input.focus();
 }
 input.addEventListener('input', render);
+hydrateIcons();
 input.addEventListener('keydown', event => {
   if (busy || event.isComposing || event.keyCode === 229) return;
   if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {

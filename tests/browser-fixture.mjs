@@ -29,7 +29,7 @@ const controller = createController(env.api);
 const paletteMode = new URLSearchParams(location.search).get('test') === 'palette';
 globalThis.chrome = {
   ...env.api,
-  runtime: { id: 'ama-test', async sendMessage(message) {
+  runtime: { id: 'ama-test', getURL: path => new URL(`../extension${path}`, import.meta.url).href, async sendMessage(message) {
     try { return { ok: true, data: await controller.dispatch(message) }; }
     catch (error) { return { ok: false, error: error.message }; }
   }, onMessage: event() },

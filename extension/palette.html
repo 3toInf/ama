@@ -8,13 +8,13 @@
   <script type="module" src="palette.js"></script>
 </head>
 <body>
-  <header><div><strong>AMA</strong><span id="palette-workspace">命令面板</span></div><button id="palette-close" type="button" aria-label="关闭命令面板">Esc</button></header>
+  <header><div><span data-icon="panel"></span><span id="palette-workspace">命令面板</span></div><button id="palette-close" type="button" aria-label="关闭命令面板">Esc</button></header>
   <main>
-    <label class="query"><span aria-hidden="true">⌕</span><input id="palette-input" role="combobox" aria-label="搜索标签、输入网址或命令" aria-controls="palette-list" aria-expanded="true" aria-autocomplete="list" placeholder="搜索标签、输入网址，或键入 > 执行命令" autocomplete="off" spellcheck="false" maxlength="8192"></label>
+    <label class="query"><span data-icon="search"></span><input id="palette-input" role="combobox" aria-label="搜索标签、输入网址或命令" aria-controls="palette-list" aria-expanded="true" aria-autocomplete="list" placeholder="搜索，或输入网址…" autocomplete="off" spellcheck="false" maxlength="8192"></label>
     <div id="palette-error" role="alert" hidden></div>
     <div id="palette-list" role="listbox" aria-label="搜索结果与命令"></div>
     <p id="palette-empty" hidden>没有匹配的命令。试试“new tab”或“settings”。</p>
   </main>
-  <footer><span>↑ ↓ 选择 <b>↵</b> 执行 <b>Esc</b> 关闭</span><span id="palette-count" aria-live="polite"></span></footer>
+  <footer><span>↑ ↓ 选择 <b>↵</b> 打开 <b>&gt;</b> 命令</span><span id="palette-count" aria-live="polite"></span></footer>
 </body>
 </html>
